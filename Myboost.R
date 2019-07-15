@@ -30,6 +30,7 @@ library(purrr)
 
 MyBoost <- function(dat){
   
+  
   dat$trt01p <- as.numeric(dat$trt01p=="Pembro")
   N <- nrow(dat)
   labels <- rep(NA,N)
@@ -43,7 +44,7 @@ MyBoost <- function(dat){
   #                     Step 2: Customized loss and error function                  #
   #----------------------------------------------------------------------#
 
-  rmst_loss <- function(preds, dtrain) {
+  rmst_loss3 <- function(preds, dtrain) {
     labels <- getinfo(dtrain, "label")
     
     ## (0) Decode y to trt01p, aval and evnt ##
@@ -157,32 +158,41 @@ MyBoost <- function(dat){
       rmst.diff.r1 <- rmst.diff.r1 + (exp(-H1.r1)-exp(-H0.r1))*dt[i+1]
       rmst.diff.r2 <- rmst.diff.r2 + (exp(-H1.r2)-exp(-H0.r2))*dt[i+1]
       ## Gradient ##
-      rmst.diff.r1.g <- rmst.diff.r1.g + km.dat$predg*(-(exp(-H1.r1)*gH1.r1)+(exp(-H0.r1)*gH0.r1))*dt[i+1]
-      rmst.diff.r2.g <- rmst.diff.r2.g + km.dat$predg*(-(exp(-H1.r2)*gH1.r2)+(exp(-H0.r2)*gH0.r2))*dt[i+1]
+      rmst.diff.r1.g <- rmst.diff.r1.g + (-(exp(-H1.r1)*gH1.r1)+(exp(-H0.r1)*gH0.r1))*dt[i+1]
+      rmst.diff.r2.g <- rmst.diff.r2.g + (-(exp(-H1.r2)*gH1.r2)+(exp(-H0.r2)*gH0.r2))*dt[i+1]
+      
+      #rmst.diff.r1.g <- rmst.diff.r1.g + km.dat$predg*(-(exp(-H1.r1)*gH1.r1)+(exp(-H0.r1)*gH0.r1))*dt[i+1]
+      #rmst.diff.r2.g <- rmst.diff.r2.g + km.dat$predg*(-(exp(-H1.r2)*gH1.r2)+(exp(-H0.r2)*gH0.r2))*dt[i+1]
       
       ## Hessian ##
-      rmst.diff.r1.h <- rmst.diff.r1.h + km.dat$predg^2*(exp(-H1.r1)*gH1.r1^2 - exp(-H1.r1)*hH1.r1 - exp(-H0.r1)*gH0.r1^2 + exp(-H0.r1)*hH0.r1)*dt[i+1] + (-(exp(-H1.r1)*gH1.r1)+(exp(-H0.r1)*gH0.r1))* km.dat$predh *dt[i+1]
-      rmst.diff.r2.h <- rmst.diff.r2.h + km.dat$predg^2*(exp(-H1.r2)*gH1.r2^2 - exp(-H1.r2)*hH1.r2 - exp(-H0.r2)*gH0.r2^2 + exp(-H0.r2)*hH0.r2)*dt[i+1] + (-(exp(-H1.r2)*gH1.r2)+(exp(-H0.r2)*gH0.r2))* km.dat$predh *dt[i+1]
+      rmst.diff.r1.h <- rmst.diff.r1.h + (exp(-H1.r1)*gH1.r1^2 - exp(-H1.r1)*hH1.r1 - exp(-H0.r1)*gH0.r1^2 + exp(-H0.r1)*hH0.r1)*dt[i+1] 
+      rmst.diff.r2.h <- rmst.diff.r2.h + (exp(-H1.r2)*gH1.r2^2 - exp(-H1.r2)*hH1.r2 - exp(-H0.r2)*gH0.r2^2 + exp(-H0.r2)*hH0.r2)*dt[i+1]
+      #rmst.diff.r1.h <- rmst.diff.r1.h + km.dat$predg^2*(exp(-H1.r1)*gH1.r1^2 - exp(-H1.r1)*hH1.r1 - exp(-H0.r1)*gH0.r1^2 + exp(-H0.r1)*hH0.r1)*dt[i+1] + (-(exp(-H1.r1)*gH1.r1)+(exp(-H0.r1)*gH0.r1))* km.dat$predh *dt[i+1]
+      #rmst.diff.r2.h <- rmst.diff.r2.h + km.dat$predg^2*(exp(-H1.r2)*gH1.r2^2 - exp(-H1.r2)*hH1.r2 - exp(-H0.r2)*gH0.r2^2 + exp(-H0.r2)*hH0.r2)*dt[i+1] + (-(exp(-H1.r2)*gH1.r2)+(exp(-H0.r2)*gH0.r2))* km.dat$predh *dt[i+1]
       
     }
     #obj <- 2*( sum(km.dat$pred)*rmst.diff.r1 - sum(1-km.dat$pred)*rmst.diff.r2    )
     #g <- (-1)*(sum(km.dat$pred)*rmst.diff.r1.g - sum(1-km.dat$pred)*rmst.diff.r2.g) 
     #h <- (-1)*(sum(km.dat$pred)*rmst.diff.r1.h - sum(1-km.dat$pred)*rmst.diff.r2.h)
     
-    g <- (-1)*(km.dat$predg*rmst.diff.r1 + km.dat$predg*rmst.diff.r2 + sum(km.dat$pred)*rmst.diff.r1.g - sum(1-km.dat$pred)*rmst.diff.r2.g)
-    h <- (-1)*( km.dat$predh*(rmst.diff.r1 + rmst.diff.r2) + 2*km.dat$predg*rmst.diff.r1.g +2*km.dat$predg*rmst.diff.r2.g + rmst.diff.r1.h*sum(km.dat$pred) - rmst.diff.r2.h*sum(1-km.dat$pred) )
+    #g <- (-1)*(km.dat$predg*rmst.diff.r1 + km.dat$predg*rmst.diff.r2 + sum(km.dat$pred)*rmst.diff.r1.g - sum(1-km.dat$pred)*rmst.diff.r2.g)
+    #h <- (-1)*( km.dat$predh*(rmst.diff.r1 + rmst.diff.r2) + 2*km.dat$predg*rmst.diff.r1.g +2*km.dat$predg*rmst.diff.r2.g + rmst.diff.r1.h*sum(km.dat$pred) - rmst.diff.r2.h*sum(1-km.dat$pred) )
+    #g1<- (-1)*(rmst.diff.r1.g - rmst.diff.r2.g)
+    #h1<- (-1)*(rmst.diff.r1.h -rmst.diff.r2.h)
     
+    g.p <- (sum(km.dat$pred)*rmst.diff.r1.g + rmst.diff.r1 - sum(1-km.dat$pred)*rmst.diff.r2.g + rmst.diff.r2)
+    h.p <- (2*rmst.diff.r1.g + sum(km.dat$pred)*rmst.diff.r1.h + 2*rmst.diff.r2.g - sum(1-km.dat$pred)*rmst.diff.r2.h)
+    g <-  km.dat$predg*(-1)*g.p
+    h <- (-1)*( (km.dat$predg)^2 * h.p  + g.p*km.dat$predh)
     
-    
-    #g.p <- (sum(km.dat$pred)*rmst.diff.r1.g + rmst.diff.r1 - sum(1-km.dat$pred)*rmst.diff.r2.g + rmst.diff.r2)
-    #h.p <- (2*rmst.diff.r1.g + sum(km.dat$pred)*rmst.diff.r1.h + 2*rmst.diff.r2.g - sum(1-km.dat$pred)*rmst.diff.r2.h)
-    #g <-  km.dat$predg*(-1)*g.p
-    #h <- (-1)*( (km.dat$predg)^2 * h.p  + g.p*km.dat$predh)
+    L <- sum(km.dat$pred)*rmst.diff.r1 - sum(1-km.dat$pred)*rmst.diff.r2 
+    g2 <- 2*L*g
+    h2 <- 2*g^2 + 2*L*h
     #h<- (-2)*(g^2+obj/2*( (km.dat$predg)^2 * h.p  + g.p*km.dat$predh))
     
     
-    return(list(grad = g, hess = h))
-    #return(list(grad = g, hess = rep(1,n)))
+    return(list(grad = g2, hess = h2))
+    #return(list(grad = g1, hess = rep(1,n)))
   }
   
   
@@ -271,18 +281,25 @@ MyBoost <- function(dat){
     }
     
     err <- (-1)*( sum(km.dat$pred)*rmst.diff.r1 - sum(1-km.dat$pred)*rmst.diff.r2    )
-    
+ 
     return(list(metric = "RMST_error", value = err))
   }
   
   #----------------------------------------------------------------------#
   #                     Step 3: Let's boost                  #
   #----------------------------------------------------------------------#
-  col<- c('x.1','x.2','x.3','x.4','x.5','y.1','y.2','y.3','y.4','y.5')
+  #col<- c('signal','x.1','x.2','x.3','x.4','x.5','y.1','y.2','y.3','y.4','y.5')
   #col<- c('signal','x.1','x.2','x.3','x.4','x.5')
-  dat[col] <- lapply(dat[col], as.factor)
+  #dat[col] <- lapply(dat[col], as.factor)
   #dat<-dat[with(dat, order(trt01p,signal,x.1,x.2,x.3,x.4,x.5,y.1,y.2,y.3,y.4,y.5)),]
-  sparse_matrix <- Matrix::sparse.model.matrix(~.-1, data = dat)
+  #sparse_matrix <- Matrix::sparse.model.matrix(~.-1, data = dat)
+  
+  dtrain <- xgb.DMatrix(as.matrix(dat),label = labels)
+  watchlist <- list(train = dtrain)
+  param <- list(max_depth = 1, eta = 0.05, silent = 1, nthread = 2, 
+                objective = rmst_loss3, eval_metric = evalerror,verbose = 2,lambda=1,base_score=-2,min_child_weight=0)
+  model <- xgb.train(param, dtrain, nrounds = 10,watchlist)
+  #xgb.dump(model = model, with_stats = TRUE)
   
   ## (3.1) ## CV to find the 'optimal' # of trees
   
@@ -300,8 +317,8 @@ MyBoost <- function(dat){
  # model <- xgboost(data = sparse_matrix, label = labels, max.depth = 1,eta=0.3,booster='gbtree',
   #                 nrounds = sum.cv$ntrees.test, objective = rmst_loss, eval_metric = evalerror,verbose = 2)
   
-   model <- xgboost(data = sparse_matrix, label = labels, max.depth = 1,eta=0.3,booster='gbtree',
-                  nrounds = 1, objective = rmst_loss, eval_metric = evalerror,verbose = 2,base_score=0)
+   #model <- xgboost(data = sparse_matrix, label = labels, max.depth = 1,eta=0.3,booster='gbtree',
+                  #nrounds = 1, objective = rmst_loss, eval_metric = evalerror,verbose = 2,base_score=0)
   
   # model$evaluation_log %>%
   #   dplyr::summarise(
@@ -324,32 +341,32 @@ MyBoost <- function(dat){
   #   eta = c(.01, .05, .1, .3),
   #   max_depth = c(1, 3, 5, 7),
   #  # min_child_weight = c(1, 3, 5, 7),
-  #   subsample = c(.65, .8, 1), 
-  #   colsample_bytree = c(.8, 1),
-  #   optimal_trees = 0,               
-  #   min_error = 0                     
+  #   #subsample = c(.65, .8, 1),
+  #   #colsample_bytree = c(.8, 1),
+  #   optimal_trees = 0,
+  #   min_error = 0
   # )
   # 
   # start.time <- Sys.time()
   # for(i in 1:nrow(hyper_grid)) {
   #   print(i)
-  #   
+  # 
   #   # create parameter list
   #   params <- list(
   #     eta = hyper_grid$eta[i],
-  #     max_depth = hyper_grid$max_depth[i],
+  #     max_depth = hyper_grid$max_depth[i]
   #     #min_child_weight = hyper_grid$min_child_weight[i],
-  #     subsample = hyper_grid$subsample[i],
-  #     colsample_bytree = hyper_grid$colsample_bytree[i]
+  #     #subsample = hyper_grid$subsample[i],
+  #     #colsample_bytree = hyper_grid$colsample_bytree[i]
   #   )
-  #   
+  # 
   #   # reproducibility
   #   set.seed(123)
-  #   
+  # 
   #   # train model
   #   xgb.tune <- xgb.cv(
   #     params = params,
-  #     data = sparse_matrix,
+  #     data = as.matrix(dat),
   #     label = labels,
   #     nrounds = 500,
   #     nfold = 5,
@@ -359,7 +376,7 @@ MyBoost <- function(dat){
   #     verbose = 0,               # silent,
   #     early_stopping_rounds = 5 # stop if no improvement for 5 consecutive trees
   #   )
-  #   
+  # 
   #   # add min training error and trees to grid
   #   hyper_grid$optimal_trees[i] <- which.min(xgb.tune$evaluation_log$test_RMST_error_mean)
   #   hyper_grid$min_error[i] <- min(xgb.tune$evaluation_log$test_RMST_error_mean)
@@ -378,11 +395,11 @@ MyBoost <- function(dat){
   
   
   
-  f <- predict(model, sparse_matrix)
+  f <- predict(model, as.matrix(dat))
   boost.pred<-1/(1+exp(-f))
   #error <- model$evaluation_log
   #plot(error$iter,-1*error$train_RMST_error,xlab='iter',ylab='obj')
-  importance_matrix <- xgb.importance(sparse_matrix@Dimnames[[2]], model = model)
+  importance_matrix <- xgb.importance(colnames(dat), model = model)
   #xgb.plot.importance(importance_matrix)
   #xgb.plot.tree(feature_names = sparse_matrix@Dimnames[[2]], model = model)
   #xgb.plot.multi.trees(model = model, feature_names = sparse_matrix@Dimnames[[2]], features.keep = 3)

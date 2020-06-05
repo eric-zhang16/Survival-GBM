@@ -1,0 +1,200 @@
+## Finding Subgroup Membership for ACTG175 HIV dataset ##
+rm(list=ls())
+library(survminer)
+library(DiagrammeR)
+library(tidyverse)
+library(survRM2)
+library(data.table)
+#--------------------------------------------------#
+#  Step 0:     Utility Function                    #
+#--------------------------------------------------#
+# plot km by treatment group 
+km.arm <- function(dat, maintxt=NULL, print.sum = T){
+  os.rf <-surv_fit(Surv(aval, evnt) ~ arm, data = dat)
+  cox<-coxph(Surv(aval,evnt)~arm,dat)
+  hr=round(summary(cox)$conf.int[-2],2)
+  summstat<-surv_median(os.rf)
+  if(print.sum)
+    print(kable(cbind(summstat,HR=c('', paste0(hr[1]," (",hr[2],",",hr[3],")"))),digits=1)%>%kable_styling(bootstrap_options = c("striped", "hover","responsive"),position = "left"))
+  os.all<-surv_fit(Surv(aval, evnt) ~ arm,data = dat)
+  p <- ggsurvplot(os.all, data = ,risk.table=TRUE,palette=c("red","black"),break.time.by=5,surv.media.line="hv",tables.colr=FALSE,legend.title="",xlab="Month",legend.labs=c("DDI", "ZDV+DDI"), tables.theme=theme_cleantable(),tables.height=0.25,fontsize=3.5,censor=F,conf.int = TRUE)+guides(col = guide_legend(keywidth=unit(2,"cm"))) 
+  return(p)
+}
+
+
+
+
+#--------------------------------------------------#
+#  Step 1:     Read in Data                        #
+#--------------------------------------------------#
+library(speff2trial)
+source("C:\\Users\\zhapingy\\OneDrive - Merck Sharp & Dohme, Corp\\Documents\\tmp\\study\\intern\\realData\\ACTG175\\Myboost.R")
+
+data(ACTG175)
+dat <- ACTG175[,c('age','wtkg','karnof','cd40','cd80','hemo','homo','drugs','race','gender','str2','symptom','arms','days','cens')]
+dat<-dat[complete.cases(dat),]
+adat <- subset(dat,arms %in% c(1,3))
+adat$aval <- adat$days/365.25*12
+adat$trt01p<- ifelse(adat$arms==1,1,0)
+adat$evnt <- adat$cens
+
+## KM plot by treatment ##
+km.dat <- cbind(adat[,c("aval","evnt")],arm=adat$trt01p)
+km.original <- km.arm(km.dat, print.sum = F)
+ggexport(km.original, width = 1000, height = 800,res=150,filename = "C:\\Users\\zhapingy\\OneDrive - Merck Sharp & Dohme, Corp\\Documents\\tmp\\study\\intern\\write-up\\graph\\ACTG175_KM_original.jpg")
+
+## Clean the data
+adat$days <- NULL
+adat$arms <- NULL
+adat$cens <- NULL
+#---------------------------------------------------#
+#  Step 2:  Use Cross Validation to Predict Optimal # 
+#           Treatment using Proposed Method         #    
+#---------------------------------------------------#
+
+## Use Cross Validation to Predict patient's Subgroup Membership ##
+
+id <- 1:nrow(adat)
+testid <- split(id, ceiling(id/(length(id)/5)))
+pred.cv <- data.frame(trt01p=NA,aval=NA,evnt=NA,ot.test=NA,p.test=NA)
+set.seed(123)
+for (r in 1:5){
+  print(paste('CV: ',r,sep=''))
+  test.id <- testid[[r]]
+  dat.train <- adat[-test.id,]
+  dat.test <- adat[test.id,]
+  model.train <- MyBoost(dat.train)
+  f.test <- predict(model.train, as.matrix(  subset(dat.test, select = -c(trt01p,aval,evnt) )  ))
+  p.test <-1/(1+exp(-f.test))
+  ot.test <- ifelse(p.test>0.5,'ZDV+DDI > DDI','ZDV+DDI <= DDI')
+  pred.test <- cbind(subset(dat.test,select=c('trt01p','aval','evnt')),ot.test,p.test)  
+  pred.cv <- rbind(pred.cv,pred.test)
+  
+}
+pred.cv <- pred.cv[-1,]
+pred.cv$Arm <- as.factor(ifelse(pred.cv$trt01p==1, "ZDV+DDI","DDI"))
+
+survdata<-pred.cv
+survdata$ot.test<-'Overall'
+survdata<-rbind(survdata,pred.cv)
+subgroup<-'ot.test'
+N<- dim(survdata)[1]
+cutoff<-ceiling(N*0.05)
+group_os<- survdata  %>% filter(!!sym(subgroup)!="",!is.na(!!sym(subgroup)),!!sym(subgroup)!="Not Reported",!!sym(subgroup)!="Missing") %>% group_by_(subgroup) %>% filter(n()>cutoff)
+group_os %>% group_split -> split.os
+group_os %>% group_keys -> key.os
+
+
+split.os %>% map(~surv_fit(Surv(aval, evnt) ~ Arm, data = .x)) -> fit.os
+names(fit.os)<-pull(key.os,subgroup)
+
+plotlist.os<- ggsurvplot_list(fit.os,split.os,risk.table = TRUE, palette = c("red", "black"), linetype=c( "dotdash","solid"),break.time.by = 5, 
+                              surv.media.line = "hv", legend.title = "", xlab = "Month", 
+                              ylab = "", legend.labs = NULL, tables.theme = theme_cleantable(), 
+                              fontsize = 3,censor=F,ylim=c(0.7,1),conf.int = TRUE) 
+
+km.cv<-arrange_ggsurvplots(plotlist.os,ncol=length(split.os))  
+
+ggexport(km.cv, width = 1700, height = 1000,res=150,filename = "C:\\Users\\zhapingy\\OneDrive - Merck Sharp & Dohme, Corp\\Documents\\tmp\\study\\intern\\write-up\\graph\\ACTG175_KM_CV.jpg")
+
+# ## Plot matched and unmatched patients ##
+# # Matched
+# pred.match <- subset(pred.cv, (ot.test=='ZDV+DDI > DDI' & Arm=='ZDV+DDI')|(ot.test=='ZDV+DDI <= DDI' & Arm=='DDI') )
+# pred.match <- subset(pred.match,select=-c(ot.test,Arm,trt01p))
+# pred.match$arm<-8
+# # UnMatched
+# pred.umatch <- subset(pred.cv, (ot.test=='ZDV+DDI > DDI' & Arm=='DDI')|(ot.test=='ZDV+DDI <= DDI' & Arm=='ZDV+DDI') )
+# pred.umatch <- subset(pred.umatch,select=-c(ot.test,Arm,trt01p))
+# pred.umatch$arm<-9
+# pred.match.plot <- rbind(km.dat,pred.match,pred.umatch)
+# 
+# 
+# pred.match.plot$arm<-as.factor(pred.match.plot$arm)
+# os.cv<-surv_fit(Surv(aval, evnt) ~ arm,data = pred.match.plot)
+# km.match.cv <- ggsurvplot(os.cv, data = ,risk.table=TRUE,palette=c("red","black","magenta","blue"),break.time.by=5,surv.media.line="hv",tables.colr=FALSE,legend.title="",xlab="Month",legend.labs=c("DDI", "ZDV+DDI","Matched","Unmatched"), tables.theme=theme_cleantable(),tables.height=0.25,fontsize=3.5,censor=F,ylim=c(0.7,1))+guides(col = guide_legend(keywidth=unit(2,"cm"))) 
+# ggexport(km.match.cv, width = 1700, height = 1200,res=150,filename = "C:\\Users\\zhapingy\\OneDrive - Merck Sharp & Dohme, Corp\\Documents\\tmp\\study\\intern\\write-up\\graph\\ACTG175_KM_match.jpg")
+
+
+## Summarize treatment effects across subgroups ##
+cox.all <-coxph(Surv(aval,evnt)~trt01p,pred.cv)
+cox.perform <-coxph(Surv(aval,evnt)~trt01p,subset(pred.cv,ot.test=='ZDV+DDI > DDI'))
+cox.nperform <-coxph(Surv(aval,evnt)~trt01p,subset(pred.cv,ot.test=='ZDV+DDI <= DDI'))
+
+rmst2(pred.cv$aval, pred.cv$evnt, pred.cv$trt01p, tau = NULL, covariates = NULL, alpha = 0.05)
+
+dat.perform <- subset(pred.cv,ot.test=='ZDV+DDI > DDI')
+trteff.perform <- rmst2(dat.perform$aval, dat.perform$evnt, dat.perform$trt01p, tau = NULL, covariates = NULL, alpha = 0.05)
+
+dat.nperform <- subset(pred.cv,ot.test=='ZDV+DDI <= DDI')
+cntleff.nperform <- rmst2(dat.nperform$aval, dat.nperform$evnt, dat.nperform$trt01p, tau = NULL, covariates = NULL, alpha = 0.05)
+
+diff.boost <- trteff.perform[[5]][1,1] - cntleff.nperform[[5]][1,1] 
+
+#--------------------------------------------------#
+#  Step 3:     Run Proposed Method on              #    
+#              Whole Sample to estimate            #
+#              the subgroup membership             #
+#--------------------------------------------------#
+set.seed(123)
+model.whole <- MyBoost(adat)
+f <- predict(model.whole, as.matrix(  subset(adat, select = -c(trt01p,aval,evnt) )  ))
+p <-1/(1+exp(-f))
+
+ot<- ifelse(p>0.5,'ZDV+DDI > DDI','ZDV+DDI <= DDI')
+
+pred <- data.frame(trt01p=adat$trt01p,aval=adat$aval,evnt=adat$evnt,ot)  
+pred$Arm <- as.factor(ifelse(pred$trt01p==1, "ZDV+DDI","DDI"))
+
+survdata<-pred
+survdata$ot<-'Overall'
+survdata<-rbind(survdata,pred)
+subgroup<-'ot'
+N<- dim(survdata)[1]
+cutoff<-ceiling(N*0.05)
+group_os<- survdata  %>% filter(!!sym(subgroup)!="",!is.na(!!sym(subgroup)),!!sym(subgroup)!="Not Reported",!!sym(subgroup)!="Missing") %>% group_by_(subgroup) %>% filter(n()>cutoff)
+group_os %>% group_split -> split.os
+group_os %>% group_keys -> key.os
+
+
+split.os %>% map(~surv_fit(Surv(aval, evnt) ~ Arm, data = .x)) -> fit.os
+names(fit.os)<-pull(key.os,subgroup)
+
+plotlist.os<- ggsurvplot_list(fit.os,split.os,risk.table = TRUE, palette = c("red", "black"), linetype=c("dotdash", "solid"),break.time.by = 5, 
+                              surv.media.line = "hv", legend.title = "", xlab = "Month", 
+                              ylab = "", legend.labs = NULL, tables.theme = theme_cleantable(), 
+                              fontsize = 3,censor=F,ylim=c(0.5,1),conf.int = TRUE) 
+
+km.cv.all<-arrange_ggsurvplots(plotlist.os,ncol=length(split.os)) 
+
+ggexport(km.cv.all, width = 1700, height = 1000,res=150,filename = "C:\\Users\\zhapingy\\OneDrive - Merck Sharp & Dohme, Corp\\Documents\\tmp\\study\\intern\\write-up\\graph\\ACTG175_KM_CV_all.jpg")
+
+
+### Importance Plot ###
+col.label <- c("Age","Weight","Karnofsky score","CD4 count at baseline","CD8 count at baseline","Hemophilia","Homosexual activity","Intravenous drug use","Race","Gender","Antiretroviral history","Symptomatic status")
+col.label <- data.frame(Feature=colnames(subset(adat, select = -c(trt01p,aval,evnt) )),Labels=col.label)
+importance_matrix <- xgb.importance(colnames(subset(adat, select = -c(trt01p,aval,evnt) )), model = model.whole)
+importance_matrix <- importance_matrix %>% left_join(col.label,by="Feature")
+
+
+importance_matrix <- subset(importance_matrix,Gain>=0.001)
+importance_matrix$Feature <- NULL
+colnames(importance_matrix)[4]<- "Feature"
+importance_matrix <- data.table(importance_matrix)
+xgb.plot.importance(importance_matrix)
+
+xgb.plot.tree(feature_names = colnames(adat), model = model.whole)
+
+### Compute value function ###
+
+dat.perform <- subset(pred,ot=='ZDV+DDI > DDI')
+trteff.perform <- rmst2(dat.perform$aval, dat.perform$evnt, dat.perform$trt01p, tau = NULL, covariates = NULL, alpha = 0.05)
+
+dat.nperform <- subset(pred,ot=='ZDV+DDI <= DDI')
+cntleff.nperform <- rmst2(dat.nperform$aval, dat.nperform$evnt, dat.nperform$trt01p, tau = NULL, covariates = NULL, alpha = 0.05)
+
+Val <- (nrow(dat.perform)/nrow(pred))*trteff.perform[[5]][1,1] - (nrow(dat.nperform )/nrow(pred))*cntleff.nperform[[5]][1,1] 
+
+
+
+
+

@@ -1,2 +1,2 @@
 # Survival-GBM
-A custimized loss function for Xgboost for finding subgroups with maximized subgroup-treatment interaction. Example code for application to ACTG175 dataset is also provided.
+A customized loss function for Xgboost for finding subgroups with maximized subgroup-treatment interaction based on RMST for censored survival data. Example code for application to ACTG175 dataset is also provided.
